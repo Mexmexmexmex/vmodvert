@@ -1,0 +1,49 @@
+name: Parallel Kuko
+
+on:
+  workflow_dispatch:
+    inputs:
+      crd_code_1:
+        description: 'CRD Auth Code for Device 1'
+        required: true
+        type: string
+     
+jobs:
+  remote_session:
+    name: Remote Session ${{ matrix.device }}
+    runs-on: windows-latest
+    
+    # Strict 30-minute limit for the entire job
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - device: 1
+            crd_code: ${{ github.event.inputs.crd_code_1 }}
+        
+    steps:
+    - name: Install and Start Chrome Remote Desktop
+      shell: pwsh
+      run: |
+        Write-Host "Installing and configuring CRD for Device ${{ matrix.device }}..."
+        
+        Invoke-WebRequest -Uri "https://dl.google.com/dl/edgedl/chrome-remote-desktop/chromeremotedesktophost.msi" -OutFile "crd_host.msi"
+        
+        Start-Process msiexec.exe -Wait -ArgumentList '/i crd_host.msi /quiet'
+        
+        & "${Env:PROGRAMFILES(X86)}\Google\Chrome Remote Desktop\CurrentVersion\remoting_start_host.exe" --code="${{ matrix.crd_code }}" --redirect-url="https://remotedesktop.google.com/_/oauthredirect" --name="${{ env.COMPUTERNAME }}-${{ matrix.device }}" --pin="112233"
+        
+        Write-Host "=============================================="
+        Write-Host "✅ Chrome Remote Desktop is configured."
+        Write-Host "   Connect to: ${{ env.COMPUTERNAME }}-${{ matrix.device }}"
+        Write-Host "   Access PIN: 112233"
+        Write-Host "=============================================="
+    - name: Keep Runner Alive
+      if: always()
+      shell: pwsh
+      run: |
+        Write-Host "Session is active. This runner will remain online until the 30-minute job timeout is reached."
+        # The sleep is set to 30 mins, but the job will likely timeout slightly before this finishes
+        Start-Sleep -Seconds 1800
